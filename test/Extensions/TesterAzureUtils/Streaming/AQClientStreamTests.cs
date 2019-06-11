@@ -53,7 +53,7 @@ namespace Tester.AzureUtils.Streaming
             {
                 clientBuilder
                     .Configure<ClusterOptions>(op => op.ServiceId = serviceId)
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
+                    .AddAzureQueueStreams(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
@@ -67,7 +67,7 @@ namespace Tester.AzureUtils.Streaming
             {
                 hostBuilder
                     .Configure<ClusterOptions>(op => op.ServiceId = serviceId)
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
+                    .AddAzureQueueStreams(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
@@ -79,12 +79,15 @@ namespace Tester.AzureUtils.Streaming
         public override void Dispose()
         {
             base.Dispose();
-            AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, AzureQueueStreamProviderUtils.GenerateDefaultAzureQueueNames(serviceId, AQStreamProviderName),
-                TestDefaultConfiguration.DataConnectionString).Wait();
-            TestAzureTableStorageStreamFailureHandler.DeleteAll().Wait();
+            if (this.HostedCluster != null)
+            {
+                AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, AzureQueueStreamProviderUtils.GenerateDefaultAzureQueueNames(serviceId, AQStreamProviderName),
+                    TestDefaultConfiguration.DataConnectionString).Wait();
+                TestAzureTableStorageStreamFailureHandler.DeleteAll().Wait();
+            }
         }
 
-        [SkippableFact, TestCategory("Functional"), TestCategory("Azure"), TestCategory("Storage"), TestCategory("Streaming")]
+        [SkippableFact(Skip="https://github.com/dotnet/orleans/issues/5639"), TestCategory("Functional"), TestCategory("Azure"), TestCategory("Storage"), TestCategory("Streaming")]
         public async Task AQStreamProducerOnDroppedClientTest()
         {
             logger.Info("************************ AQStreamProducerOnDroppedClientTest *********************************");

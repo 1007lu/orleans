@@ -86,9 +86,9 @@ namespace Orleans.TestingHost.Utils
                     bool passed;
                     do
                     {
-                        passed = await predicate(false);
                         // need to wait a bit to before re-checking the condition.
-                        if (!passed) await Task.Delay(delayOnFail.Value);
+                        await Task.Delay(delayOnFail.Value);
+                        passed = await predicate(false);
                     }
                     while (!passed && keepGoing[0]);
                     if(!passed)
@@ -108,7 +108,7 @@ namespace Orleans.TestingHost.Utils
             await task;
         }
 
-        /// <summary> Multipy a timeout by a value </summary>
+        /// <summary> Multiply a timeout by a value </summary>
         public static TimeSpan Multiply(TimeSpan time, double value)
         {
             double ticksD = checked(time.Ticks * value);

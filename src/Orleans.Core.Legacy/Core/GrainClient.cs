@@ -14,7 +14,7 @@ namespace Orleans
     /// <summary>
     /// Client runtime for connecting to Orleans system
     /// </summary>
-    /// TODO: Make this class non-static and inject it where it is needed.
+    [Obsolete("This type is obsolete and may be removed in a future release. Use ClientBuilder to create an instance of IClusterClient instead.")]
     public static class GrainClient
     {
         /// <summary>
@@ -223,7 +223,7 @@ namespace Orleans
         }
 
         /// <summary>
-        /// This is the lock free version of uninitilize so we can share
+        /// This is the lock free version of uninitialize so we can share
         /// it between the public method and error paths inside initialize.
         /// This should only be called inside a lock(initLock) block.
         /// </summary>
@@ -243,7 +243,7 @@ namespace Orleans
                 }
                 else
                 {
-                    client?.Abort();
+                    client?.AbortAsync().GetAwaiter().GetResult();
                 }
             }
             catch (Exception)
@@ -257,7 +257,7 @@ namespace Orleans
         }
 
         /// <summary>
-        /// Check that the runtime is intialized correctly, and throw InvalidOperationException if not
+        /// Check that the runtime is initialized correctly, and throw InvalidOperationException if not
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown if Orleans runtime is not correctly initialized before this call.</exception>
         private static void CheckInitialized()

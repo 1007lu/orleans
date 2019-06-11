@@ -37,7 +37,7 @@ namespace Orleans.Configuration
 
         /// <summary>
         /// ActivationSchedulingQuantum is a soft time limit on the duration of activation macro-turn (a number of micro-turns). 
-        /// If a activation was running its micro-turns longer than this, we will give up the thread.
+        /// If an activation was running its micro-turns longer than this, we will give up the thread.
         /// If this is set to zero or a negative number, then the full work queue is drained (MaxWorkItemsPerTurn allowing).
         /// </summary>
         public TimeSpan ActivationSchedulingQuantum { get; set; } = DEFAULT_ACTIVATION_SCHEDULING_QUANTUM;
@@ -59,6 +59,12 @@ namespace Orleans.Configuration
         /// For test use only.  Do not alter from default in production services
         /// </summary>
         public bool EnableWorkerThreadInjection { get; set; } = DEFAULT_ENABLE_WORKER_THREAD_INJECTION;
+
+        /// <summary>
+        /// The period of time after which to log errors for tasks scheduled to stopped activations.
+        /// </summary>
+        public TimeSpan StoppedActivationWarningInterval { get; set; } = TimeSpan.FromMinutes(1);
+
         public const bool DEFAULT_ENABLE_WORKER_THREAD_INJECTION = false;
     }
 }

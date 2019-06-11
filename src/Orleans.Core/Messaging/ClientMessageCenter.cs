@@ -120,7 +120,7 @@ namespace Orleans.Messaging
             this.messageFactory = messageFactory;
             this.connectionStatusListener = connectionStatusListener;
             Running = false;
-            GatewayManager = new GatewayManager(gatewayOptions.Value, gatewayListProvider, loggerFactory);
+            GatewayManager = new GatewayManager(this, gatewayOptions.Value, gatewayListProvider, loggerFactory);
             PendingInboundMessages = new BlockingCollection<Message>();
             gatewayConnections = new Dictionary<Uri, GatewayConnection>();
             numMessages = 0;
@@ -330,13 +330,7 @@ namespace Orleans.Messaging
         {
             try
             {
-                if (ct.IsCancellationRequested)
-                {
-                    return null;
-                }
-
-                // Don't pass CancellationToken to Take. It causes too much spinning.
-                return PendingInboundMessages.Take();
+                return PendingInboundMessages.Take(ct);
             }
             catch (ThreadAbortException exc)
             {
@@ -379,7 +373,7 @@ namespace Orleans.Messaging
         public void RejectMessage(Message msg, string reason, Exception exc = null)
         {
             if (!Running) return;
-            
+
             if (msg.Direction != Message.Directions.Request)
             {
                 if (logger.IsEnabled(LogLevel.Debug)) logger.Debug(ErrorCode.ProxyClient_DroppingMsg, "Dropping message: {0}. Reason = {1}", msg, reason);
@@ -450,17 +444,45 @@ namespace Orleans.Messaging
             ClientId = clientId;
         }
 
+        internal void CleanupGatewayConnections(IList<Uri> liveGateways)
+        {
+            lock (lockable)
+            {
+                foreach (var weakRef in this.grainBuckets)
+                {
+                    if (weakRef != null && weakRef.IsAlive)
+                    {
+                        var connection = weakRef.Target as GatewayConnection;
+                        if (!liveGateways.Contains(connection.Address))
+                        {
+                            if (connection.IsLive)
+                            {
+                                this.logger.Warn(
+                                    ErrorCode.ProxyClient_GatewayUnknownStatus,
+                                    "Stopping connection to {gateway} because it is not known by the gateway manager", connection.Address);
+                                connection.Stop();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         internal void OnGatewayConnectionOpen()
         {
-            Interlocked.Increment(ref numberOfConnectedGateways);
+            int newCount = Interlocked.Increment(ref numberOfConnectedGateways);
+            this.connectionStatusListener.NotifyGatewayCountChanged(newCount, newCount - 1);
         }
 
         internal void OnGatewayConnectionClosed()
         {
-            if (Interlocked.Decrement(ref numberOfConnectedGateways) == 0)
+            var gatewayCount = Interlocked.Decrement(ref numberOfConnectedGateways);
+            if (gatewayCount == 0)
             {
                 this.connectionStatusListener.NotifyClusterConnectionLost();
             }
+
+            this.connectionStatusListener.NotifyGatewayCountChanged(gatewayCount, gatewayCount + 1);
         }
 
         public void Dispose()

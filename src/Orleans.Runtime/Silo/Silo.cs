@@ -38,7 +38,7 @@ namespace Orleans.Runtime
     {
         /// <summary> Standard name for Primary silo. </summary>
         public const string PrimarySiloName = "Primary";
-
+        private static TimeSpan WaitForMessageToBeQueuedForOutbound = TimeSpan.FromSeconds(2);
         /// <summary> Silo Types. </summary>
         public enum SiloType
         {
@@ -118,6 +118,7 @@ namespace Orleans.Runtime
         /// </summary>
         /// <param name="siloDetails">The silo initialization parameters</param>
         /// <param name="services">Dependency Injection container</param>
+        [Obsolete("This constructor is obsolete and may be removed in a future release. Use SiloHostBuilder to create an instance of ISiloHost instead.")]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "Should not Dispose of messageCenter in this method because it continues to run / exist after this point.")]
         public Silo(ILocalSiloDetails siloDetails, IServiceProvider services)
@@ -250,11 +251,6 @@ namespace Orleans.Runtime
             logger.Info(ErrorCode.SiloInitializingFinished, "-------------- Started silo {0}, ConsistentHashCode {1:X} --------------", SiloAddress.ToLongString(), SiloAddress.GetConsistentHashCode());
         }
 
-        public void Start()
-        {
-            StartAsync(CancellationToken.None).GetAwaiter().GetResult();
-        }
-
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             StartTaskWithPerfAnalysis("Start Scheduler", scheduler.Start, new Stopwatch());
@@ -370,7 +366,7 @@ namespace Orleans.Runtime
 
             logger.Info(ErrorCode.SiloStarting, "Silo Start()");
 
-            var processExitHandlingOptions = this.Services.GetService<IOptions<ProcessExitHandlingOptions>>().Value;
+            var processExitHandlingOptions = this.Services.GetRequiredService<IOptions<ProcessExitHandlingOptions>>().Value;
             if(processExitHandlingOptions.FastKillOnProcessExit)
                 AppDomain.CurrentDomain.ProcessExit += HandleProcessExit;
             
@@ -582,17 +578,17 @@ namespace Orleans.Runtime
         private void ConfigureThreadPoolAndServicePointSettings()
         {
             PerformanceTuningOptions performanceTuningOptions = Services.GetRequiredService<IOptions<PerformanceTuningOptions>>().Value;
-            if (performanceTuningOptions.MinDotNetThreadPoolSize > 0)
+            if (performanceTuningOptions.MinDotNetThreadPoolSize > 0 || performanceTuningOptions.MinIOThreadPoolSize > 0)
             {
                 int workerThreads;
                 int completionPortThreads;
                 ThreadPool.GetMinThreads(out workerThreads, out completionPortThreads);
                 if (performanceTuningOptions.MinDotNetThreadPoolSize > workerThreads ||
-                    performanceTuningOptions.MinDotNetThreadPoolSize > completionPortThreads)
+                    performanceTuningOptions.MinIOThreadPoolSize > completionPortThreads)
                 {
                     // if at least one of the new values is larger, set the new min values to be the larger of the prev. and new config value.
                     int newWorkerThreads = Math.Max(performanceTuningOptions.MinDotNetThreadPoolSize, workerThreads);
-                    int newCompletionPortThreads = Math.Max(performanceTuningOptions.MinDotNetThreadPoolSize, completionPortThreads);
+                    int newCompletionPortThreads = Math.Max(performanceTuningOptions.MinIOThreadPoolSize, completionPortThreads);
                     bool ok = ThreadPool.SetMinThreads(newWorkerThreads, newCompletionPortThreads);
                     if (ok)
                     {
@@ -710,10 +706,6 @@ namespace Orleans.Runtime
             // Stop scheduling/executing application turns
             SafeExecute(scheduler.StopApplicationTurns);
 
-            // Directory: Speed up directory handoff
-            // will be started automatically when directory receives SiloStatusChangeNotification(Stopping)
-            SafeExecute(() => LocalGrainDirectory.StopPreparationCompletion.WithCancellation(ct));
-
             return Task.CompletedTask;
         }
 
@@ -762,10 +754,15 @@ namespace Orleans.Runtime
                 {
                     logger.Info(ErrorCode.SiloShuttingDown, "Silo starting to Shutdown()");
                     // Write "ShutDown" state in the table + broadcast gossip msgs to re-read the table to everyone
+                    //We do a 30 ms wait on the async silo status gossip in shutdown senario.
                     await scheduler.QueueTask(this.membershipOracle.ShutDown, this.membershipOracleContext)
                         .WithCancellation(ct, "MembershipOracle Shutting down failed because the task was cancelled");
-                    // Deactivate all grains
+                    //Stop LocalGrainDirectory
+                    await scheduler.QueueTask(()=>localGrainDirectory.Stop(true), localGrainDirectory.CacheValidator.SchedulingContext)
+                        .WithCancellation(ct, "localGrainDirectory Stop failed because the task was cancelled");
                     SafeExecute(() => catalog.DeactivateAllActivations().Wait(ct));
+                    //wait for all queued message sent to OutboundMessageQueue before MessageCenter stop and OutboundMessageQueue stop. 
+                    await Task.Delay(WaitForMessageToBeQueuedForOutbound);
                 }
                 else
                 {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
@@ -24,7 +24,7 @@ namespace Orleans.Configuration
         public const string DEFAULT_CONTAINER_NAME = "grainstate";
 
         /// <summary>
-        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialzed prior to use.
+        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialized prior to use.
         /// </summary>
         public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
         public const int DEFAULT_INIT_STAGE = ServiceLifecycleStage.ApplicationServices;
@@ -33,6 +33,7 @@ namespace Orleans.Configuration
         public bool UseFullAssemblyNames { get; set; }
         public bool IndentJson { get; set; }
         public TypeNameHandling? TypeNameHandling { get; set; }
+        public Action<JsonSerializerSettings> ConfigureJsonSerializerSettings { get; set; }
     }
 
     /// <summary>
@@ -62,6 +63,7 @@ namespace Orleans.Configuration
             try
             {
                 AzureStorageUtils.ValidateContainerName(options.ContainerName);
+                AzureStorageUtils.ValidateBlobName(this.name);
             }
             catch(ArgumentException e)
             {

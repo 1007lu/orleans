@@ -504,6 +504,7 @@ namespace Orleans
         MembershipUpdateIAmAliveFailure        = MembershipBase + 59,
         MembershipStartingIAmAliveTimer        = MembershipBase + 60,
         MembershipJoiningPreconditionFailure   = MembershipBase + 61,
+        MembershipCleanDeadEntriesFailure      = MembershipBase + 62,
 
         NSMembershipStarting                   = MembershipBase + 70,
         NSMembershipBecomeActive               = MembershipBase + 71,
@@ -589,6 +590,7 @@ namespace Orleans
         ProxyClient_StartDone                       = ProxyClientBase + 29,
         ProxyClient_OGC_TargetNotFound_2            = ProxyClientBase + 30,
         ProxyClient_AppDomain_Unload                = ProxyClientBase + 31,
+        ProxyClient_GatewayUnknownStatus            = ProxyClientBase + 32,
 
         MessagingBase                           = Runtime + 1000,
         Messaging_IMA_DroppingConnection        = MessagingBase + 1,
@@ -652,7 +654,7 @@ namespace Orleans
         SchedulerTurnTooLong2                   = SchedulerBase + 14,
         SchedulerTurnTooLong3                   = SchedulerBase + 15,
         SchedulerWorkGroupShuttingDown          = SchedulerBase + 16,
-        SchedulerNotEnqueuWorkWhenShutdown      = SchedulerBase + 17,
+        SchedulerEnqueueWorkWhenShutdown        = SchedulerBase + 17,
         SchedulerNotExecuteWhenShutdown         = SchedulerBase + 18,
         SchedulerAppTurnsStopped_1              = SchedulerBase + 19,
         SchedulerWorkGroupStopping              = SchedulerBase + 20,

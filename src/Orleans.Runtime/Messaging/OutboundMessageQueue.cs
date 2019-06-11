@@ -18,14 +18,17 @@ namespace Orleans.Runtime.Messaging
         private readonly ILogger logger;
         private bool stopped;
 
-        public int Count
+        public int GetCount()
         {
-            get
-            {
-                int n = senders.Where(sender => sender.IsValueCreated).Sum(sender => sender.Value.Count);
-                n += systemSender.Count + pingSender.Count;
-                return n;
-            }
+            int n = GetApplicationMessageCount();
+            n += systemSender.Count + pingSender.Count;
+            return n;
+        }
+
+        public int GetApplicationMessageCount()
+        {
+            int n = senders.Where(sender => sender.IsValueCreated).Sum(sender => sender.Value.Count);
+            return n;
         }
 
         internal const string QUEUED_TIME_METADATA = "QueuedTime";
@@ -148,8 +151,11 @@ namespace Orleans.Runtime.Messaging
             stopped = true;
             foreach (var sender in senders)
             {
-                sender.Value.Stop();
-                sender.Value.Dispose();
+                if (sender.IsValueCreated)
+                {
+                    sender.Value.Stop();
+                    sender.Value.Dispose();
+                }
             }
             systemSender.Stop();
             pingSender.Stop();

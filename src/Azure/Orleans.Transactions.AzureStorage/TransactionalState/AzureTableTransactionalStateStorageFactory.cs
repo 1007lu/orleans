@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,8 +23,8 @@ namespace Orleans.Transactions.AzureStorage
 
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
         {
-            IOptionsSnapshot<AzureTableTransactionalStateOptions> optionsSnapshot = services.GetRequiredService<IOptionsSnapshot<AzureTableTransactionalStateOptions>>();
-            return ActivatorUtilities.CreateInstance<AzureTableTransactionalStateStorageFactory>(services, name, optionsSnapshot.Get(name));
+            var optionsMonitor = services.GetRequiredService<IOptionsMonitor<AzureTableTransactionalStateOptions>>();
+            return ActivatorUtilities.CreateInstance<AzureTableTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }
 
         public AzureTableTransactionalStateStorageFactory(string name, AzureTableTransactionalStateOptions options, IOptions<ClusterOptions> clusterOptions, ITypeResolver typeResolver, IGrainFactory grainFactory, ILoggerFactory loggerFactory)
@@ -41,7 +41,7 @@ namespace Orleans.Transactions.AzureStorage
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
         {
             string partitionKey = MakePartitionKey(context, stateName);
-            return ActivatorUtilities.CreateInstance<AzureTableTransactionalStateStorage<TState>>(context.ActivationServices, this.table, partitionKey, stateName, this.jsonSettings);
+            return ActivatorUtilities.CreateInstance<AzureTableTransactionalStateStorage<TState>>(context.ActivationServices, this.table, partitionKey, this.jsonSettings);
         }
 
         public void Participate(ISiloLifecycle lifecycle)

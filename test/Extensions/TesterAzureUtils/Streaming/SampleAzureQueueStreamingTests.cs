@@ -35,7 +35,7 @@ namespace Tester.AzureUtils.Streaming
             public void Configure(ISiloHostBuilder hostBuilder)
             {
                 hostBuilder
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(StreamProvider, ob=>ob.Configure<IOptions<ClusterOptions>>(
+                    .AddAzureQueueStreams(StreamProvider, ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
@@ -47,9 +47,12 @@ namespace Tester.AzureUtils.Streaming
 
         public override void Dispose()
         {
-            AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, 
-                AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount), 
-                TestDefaultConfiguration.DataConnectionString).Wait();
+            if (this.HostedCluster != null)
+            {
+                AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance,
+                    AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount),
+                    TestDefaultConfiguration.DataConnectionString).Wait();
+            }
         }
 
         [SkippableFact, TestCategory("Functional")]

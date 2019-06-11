@@ -38,7 +38,7 @@ namespace Tester.AzureUtils.Streaming
             public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
             {
                 clientBuilder
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
+                    .AddAzureQueueStreams(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
@@ -53,7 +53,7 @@ namespace Tester.AzureUtils.Streaming
             {
                 hostBuilder
                      .AddMemoryGrainStorage("PubSubStore")
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
+                    .AddAzureQueueStreams(AQStreamProviderName, ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
@@ -70,7 +70,10 @@ namespace Tester.AzureUtils.Streaming
         public override void Dispose()
         {
             base.Dispose();
-            AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount), TestDefaultConfiguration.DataConnectionString).Wait();
+            if (this.HostedCluster != null)
+            {
+                AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount), TestDefaultConfiguration.DataConnectionString).Wait();
+            }
         }
         
         [SkippableFact, TestCategory("Functional")]

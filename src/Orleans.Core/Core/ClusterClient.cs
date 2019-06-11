@@ -9,6 +9,8 @@ using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Runtime;
 using Orleans.Streams;
+using Microsoft.Extensions.Hosting;
+using Orleans.Hosting;
 
 namespace Orleans
 {
@@ -20,6 +22,7 @@ namespace Orleans
         private readonly IRuntimeClient runtimeClient;
         private readonly ClusterClientLifecycle clusterClientLifecycle;
         private readonly AsyncLock initLock = new AsyncLock();
+        private readonly ClientApplicationLifetime applicationLifetime;
         private LifecycleState state = LifecycleState.Created;
 
         private enum LifecycleState
@@ -44,7 +47,7 @@ namespace Orleans
             this.clusterClientLifecycle = new ClusterClientLifecycle(loggerFactory.CreateLogger<LifecycleSubject>());
 
             //set PropagateActivityId flag from node cofnig
-            RequestContext.PropagateActivityId = clientMessagingOptions.Value.PropagateActivityId;
+            RequestContext.PropagateActivityId |= clientMessagingOptions.Value.PropagateActivityId;
 
             // register all lifecycle participants
             IEnumerable<ILifecycleParticipant<IClusterClientLifecycle>> lifecycleParticipants = this.ServiceProvider.GetServices<ILifecycleParticipant<IClusterClientLifecycle>>();
@@ -61,6 +64,9 @@ namespace Orleans
             {
                 participant?.Participate(clusterClientLifecycle);
             }
+
+            // It is fine for this field to be null in the case that the silo is not the host.
+            this.applicationLifetime = runtimeClient.ServiceProvider.GetService<IApplicationLifetime>() as ClientApplicationLifetime;
         }
 
         /// <inheritdoc />
@@ -120,20 +126,20 @@ namespace Orleans
                 await this.clusterClientLifecycle.OnStart().ConfigureAwait(false);
                 this.state = LifecycleState.Started;
             }
+
+            this.applicationLifetime?.NotifyStarted();
         }
 
         /// <inheritdoc />
         public Task Close() => this.Stop(gracefully: true);
 
         /// <inheritdoc />
-        public void Abort()
-        {
-            this.Stop(gracefully: false).GetAwaiter().GetResult();
-        }
+        public Task AbortAsync() => this.Stop(gracefully: false);
 
         private async Task Stop(bool gracefully)
         {
             if (this.IsDisposing) return;
+            this.applicationLifetime?.StopApplication();
             using (await this.initLock.LockAsync().ConfigureAwait(false))
             {
                 if (this.state == LifecycleState.Disposed) return;
@@ -164,10 +170,12 @@ namespace Orleans
                     if (this.state == LifecycleState.Disposing) this.state = LifecycleState.Invalid;
                 }
             }
+
+            this.applicationLifetime?.NotifyStopped();
         }
 
         /// <inheritdoc />
-        void IDisposable.Dispose() => this.Abort();
+        void IDisposable.Dispose() => this.AbortAsync().GetAwaiter().GetResult();
 
         /// <inheritdoc />
         public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string grainClassNamePrefix = null)

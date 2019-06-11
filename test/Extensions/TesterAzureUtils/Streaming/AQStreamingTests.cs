@@ -38,7 +38,7 @@ namespace Tester.AzureUtils.Streaming
             {
                 clientBuilder
                     .AddSimpleMessageStreamProvider(SmsStreamProviderName)
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AzureQueueStreamProviderName, b=>
+                    .AddAzureQueueStreams(AzureQueueStreamProviderName, b=>
                     b.ConfigureAzureQueue(ob=>ob.Configure<IOptions<ClusterOptions>>(
                         (options, dep) =>
                         {
@@ -65,7 +65,7 @@ namespace Tester.AzureUtils.Streaming
                             options.DeleteStateOnClear = true;
                         }))
                     .AddMemoryGrainStorage("MemoryStore")
-                    .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AzureQueueStreamProviderName, c=>
+                    .AddAzureQueueStreams(AzureQueueStreamProviderName, c=>
                         c.ConfigureAzureQueue(ob => ob.Configure<IOptions<ClusterOptions>>(
                             (options, dep) =>
                             {
@@ -128,7 +128,7 @@ namespace Tester.AzureUtils.Streaming
             await runner.StreamTest_06_ManyDifferent_ManyProducerGrainManyConsumerClients();
         }
 
-        [SkippableFact, TestCategory("Functional")]
+        [SkippableFact(Skip="https://github.com/dotnet/orleans/issues/5648"), TestCategory("Functional")]
         public async Task AQ_07_ManyDifferent_ManyProducerClientsManyConsumerGrains()
         {
             await runner.StreamTest_07_ManyDifferent_ManyProducerClientsManyConsumerGrains();

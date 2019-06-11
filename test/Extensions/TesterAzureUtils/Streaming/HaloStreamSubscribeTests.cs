@@ -54,7 +54,7 @@ namespace UnitTests.HaloTests.Streaming
                             options.DeleteStateOnClear = true;
                             options.ConnectionString = TestDefaultConfiguration.DataConnectionString;
                         }))
-                        .AddAzureQueueStreams<AzureQueueDataAdapterV2>(AzureQueueStreamProviderName, b=>b
+                        .AddAzureQueueStreams(AzureQueueStreamProviderName, b=>b
                         .ConfigureAzureQueue(ob => ob.Configure<IOptions<ClusterOptions>>(
                                 (options, dep) =>
                                 {
@@ -62,7 +62,7 @@ namespace UnitTests.HaloTests.Streaming
                                     options.QueueNames = AzureQueueUtilities.GenerateQueueNames(dep.Value.ClusterId, queueCount);
                             })));
                     hostBuilder
-                        .AddAzureQueueStreams<AzureQueueDataAdapterV2>("AzureQueueProvider2", b=>b
+                        .AddAzureQueueStreams("AzureQueueProvider2", b=>b
                         .ConfigureAzureQueue(ob => ob.Configure<IOptions<ClusterOptions>>(
                                 (options, dep) =>
                                 {
@@ -75,12 +75,15 @@ namespace UnitTests.HaloTests.Streaming
             public override void Dispose()
             {
                 base.Dispose();
-                AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, 
-                    AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount),
-                    TestDefaultConfiguration.DataConnectionString).Wait();
-                AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance, 
-                    AzureQueueUtilities.GenerateQueueNames($"{this.HostedCluster.Options.ClusterId}2", queueCount), 
-                    TestDefaultConfiguration.DataConnectionString).Wait();
+                if (this.HostedCluster != null)
+                {
+                    AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance,
+                        AzureQueueUtilities.GenerateQueueNames(this.HostedCluster.Options.ClusterId, queueCount),
+                        TestDefaultConfiguration.DataConnectionString).Wait();
+                    AzureQueueStreamProviderUtils.DeleteAllUsedAzureQueues(NullLoggerFactory.Instance,
+                        AzureQueueUtilities.GenerateQueueNames($"{this.HostedCluster.Options.ClusterId}2", queueCount),
+                        TestDefaultConfiguration.DataConnectionString).Wait();
+                }
             }
         }
 

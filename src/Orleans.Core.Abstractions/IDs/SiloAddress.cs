@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
-using Orleans.Core.Abstractions.Internal;
 
 namespace Orleans.Runtime
 {
@@ -128,7 +127,7 @@ namespace Orleans.Runtime
         /// <remarks>
         /// Note: This string value is not comparable with the <c>FromParsableString</c> method -- use the <c>ToParsableString</c> method for that purpose.
         /// </remarks>
-        /// <returns>String representaiton of this SiloAddress.</returns>
+        /// <returns>String representation of this SiloAddress.</returns>
         public string ToLongString()
         {
             return ToString();
@@ -140,7 +139,7 @@ namespace Orleans.Runtime
         /// <remarks>
         /// Note: This string value is not comparable with the <c>FromParsableString</c> method -- use the <c>ToParsableString</c> method for that purpose.
         /// </remarks>
-        /// <returns>String representaiton of this SiloAddress.</returns>
+        /// <returns>String representation of this SiloAddress.</returns>
         public string ToStringWithHashCode()
         {
             return String.Format("{0}/x{1, 8:X8}", ToString(), GetConsistentHashCode());
@@ -265,6 +264,20 @@ namespace Orleans.Runtime
                 ((Generation == other.Generation));
         }
 
+        internal bool IsSameEndpoint(SiloAddress other)
+        {
+            return other != null && this.Endpoint.Address.Equals(other.Endpoint.Address) && this.Endpoint.Port == other.Endpoint.Port;
+        }
+
+        public bool IsSuccessorOf(SiloAddress other)
+        {
+            return IsSameEndpoint(other) && this.Generation != 0 && other.Generation != 0 && this.Generation > other.Generation;
+        }
+
+        public bool IsPredecessorOf(SiloAddress other)
+        {
+            return IsSameEndpoint(other) && this.Generation != 0 && other.Generation != 0 && this.Generation < other.Generation;
+        }
 
         // non-generic version of CompareTo is needed by some contexts. Just calls generic version.
         public int CompareTo(object obj)

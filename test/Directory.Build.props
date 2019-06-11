@@ -6,15 +6,14 @@
   <Import Project="$(_ParentDirectoryBuildPropsPath)" Condition="Exists('$(_ParentDirectoryBuildPropsPath)')"/>
 
   <PropertyGroup>
-    <NoWarn>$(NoWarn);FS2003</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);612,618</WarningsNotAsErrors>
+    <NoWarn>$(NoWarn);FS2003,612,618</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <!-- Needed for tests to force the generation of binding redirects -->
-    <RuntimeIdentifier>win10-x64</RuntimeIdentifier>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
 

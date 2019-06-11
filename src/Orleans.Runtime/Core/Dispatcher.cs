@@ -204,7 +204,8 @@ namespace Orleans.Runtime
             Exception exc, 
             string rejectInfo = null)
         {
-            if (message.Direction == Message.Directions.Request)
+            if (message.Direction == Message.Directions.Request
+                || (message.Direction == Message.Directions.OneWay && message.HasCacheInvalidationHeader))
             {
                 var str = String.Format("{0} {1}", rejectInfo ?? "", exc == null ? "" : exc.ToString());
                 MessagingStatisticsGroup.OnRejectedMessage(message);
@@ -241,7 +242,7 @@ namespace Orleans.Runtime
                 {
                     logger.Warn(ErrorCode.Dispatcher_Receive_InvalidActivation,
                         "Response received for invalid activation {0}", message);
-                    MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Ivalid");
+                    MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Invalid");
                     return;
                 }
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedOk(message);
@@ -325,9 +326,9 @@ namespace Orleans.Runtime
         {
             bool canInterleave = 
                    incoming.IsAlwaysInterleave
-                || targetActivation.Running == null
-                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly)
-                || IsCallChainReentrancyAllowed(targetActivation, incoming)
+                || targetActivation.Blocking == null
+                || (targetActivation.Blocking.IsReadOnly && incoming.IsReadOnly)
+                || (schedulingOptions.AllowCallChainReentrancy && targetActivation.ActivationId.Equals(incoming.SendingActivation))
                 || catalog.CanInterleave(targetActivation.ActivationId, incoming);
 
             return canInterleave;
@@ -337,37 +338,21 @@ namespace Orleans.Runtime
         /// https://github.com/dotnet/orleans/issues/3184
         /// Checks whether reentrancy is allowed for calls to grains that are already part of the call chain.
         /// Covers following case: grain A calls grain B, and while executing the invoked method B calls back to A. 
-        /// Design: Each call chain have unique id. If target of outgoing request is already part of the chain - 
+        /// Design: Senders collection `RunningRequestsSenders` contains sending grains references
+        /// during duration of request processing. If target of outgoing request is found in that collection - 
         /// such request will be marked as interleaving in order to prevent deadlocks.
         /// </summary>
-        private bool IsCallChainReentrancyAllowed(ActivationData targetActivation, Message incoming)
+        private void MarkSameCallChainMessageAsInterleaving(ActivationData sendingActivation, Message outgoing)
         {
-            if (!schedulingOptions.AllowCallChainReentrancy
-                 || incoming.Direction == Message.Directions.OneWay)
-            {
-                return false;
-            }
-
-            if (incoming.CallChainId == null || targetActivation.Running == null)
-            {
-                return false;
-            }
-
-            // do not allow interleaving between requests which are concurrently sent from the same activation
-            var isCallFromOriginatorActivation = incoming.SendingActivation.Equals(targetActivation.Running.SendingActivation);
-            return !isCallFromOriginatorActivation && incoming.CallChainId != null
-                && targetActivation.Running.CallChainId == incoming.CallChainId;
-        }
-
-        private void EnsureCallChainIdIsSet(ActivationData sendingActivation, Message outgoing)
-        {
-            if (sendingActivation?.Running == null)
+            if (!schedulingOptions.AllowCallChainReentrancy)
             {
                 return;
             }
 
-            sendingActivation.Running.CallChainId = sendingActivation.Running.CallChainId ?? outgoing.Id;
-            outgoing.CallChainId = sendingActivation.Running.CallChainId;
+            if (sendingActivation?.RunningRequestsSenders.Contains(outgoing.TargetActivation) == true)
+            {
+                outgoing.IsAlwaysInterleave = true;
+            }
         }
 
         /// <summary>
@@ -430,7 +415,7 @@ namespace Orleans.Runtime
                 }
 
                 // Now we can actually scheduler processing of this request
-                targetActivation.RecordRunning(message);
+                targetActivation.RecordRunning(message, message.IsAlwaysInterleave);
 
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedOk(message);
                 scheduler.QueueWorkItem(new InvokeWorkItem(targetActivation, message, this, this.invokeWorkItemLogger), targetActivation.SchedulingContext);
@@ -542,8 +527,18 @@ namespace Orleans.Runtime
             bool forwardingSucceded = true;
             try
             {
-
-                logger.Info(ErrorCode.Messaging_Dispatcher_TryForward, $"Trying to forward after {failedOperation}, ForwardCount = {message.ForwardCount}. Message {message}.");
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        (int)ErrorCode.Messaging_Dispatcher_TryForward,
+                        "Trying to forward after {FailedOperation}, ForwardCount = {ForwardCount}. OldAddress = {OldAddress}, ForwardingAddress = {ForwardingAddress}, Message {Message}, Exception: {Exception}.",
+                        failedOperation,
+                        message.ForwardCount,
+                        oldAddress,
+                        forwardingAddress,
+                        message,
+                        exc);
+                }
 
                 // if this message is from a different cluster and hit a non-existing activation
                 // in this cluster (which can happen due to stale cache or directory states)
@@ -574,11 +569,25 @@ namespace Orleans.Runtime
             }
             finally
             {
+                var sentRejection = false;
+
+                // If the message was a one-way message, send a cache invalidation response even if the message was successfully forwarded.
+                if (message.Direction == Message.Directions.OneWay)
+                {
+                    this.RejectMessage(
+                        message,
+                        Message.RejectionTypes.CacheInvalidation,
+                        exc,
+                        "OneWay message sent to invalid activation");
+                    sentRejection = true;
+                }
+
                 if (!forwardingSucceded)
                 {
                     var str = $"Forwarding failed: tried to forward message {message} for {message.ForwardCount} times after {failedOperation} to invalid activation. Rejecting now.";
                     logger.Warn(ErrorCode.Messaging_Dispatcher_TryForwardFailed, str, exc);
-                    RejectMessage(message, Message.RejectionTypes.Transient, exc, str);
+
+                    if (!sentRejection) RejectMessage(message, Message.RejectionTypes.Transient, exc, str);
                 }
             }
         }
@@ -637,10 +646,13 @@ namespace Orleans.Runtime
         }
 
         // Forwarding is used by the receiver, usually when it cannot process the message and forwards it to another silo to perform the processing
-        // (got here due to outdated cache, silo is shutting down/overloaded, ...).
+        // (got here due to duplicate activation, outdated cache, silo is shutting down/overloaded, ...).
         private static bool MayForward(Message message, SiloMessagingOptions messagingOptions)
         {
-            return message.ForwardCount < messagingOptions.MaxForwardCount;
+            return message.ForwardCount < messagingOptions.MaxForwardCount
+                // allow one more forward hop for multi-cluster case
+                + (message.IsReturnedFromRemoteCluster ? 1 : 0)
+                ;
         }
 
         /// <summary>
@@ -816,7 +828,7 @@ namespace Orleans.Runtime
         /// <param name="sendingActivation"></param>
         public void TransportMessage(Message message, ActivationData sendingActivation = null)
         {
-            EnsureCallChainIdIsSet(sendingActivation, message);
+            MarkSameCallChainMessageAsInterleaving(sendingActivation, message);
             if (logger.IsEnabled(LogLevel.Trace)) logger.Trace(ErrorCode.Dispatcher_Send_AddressedMessage, "Addressed message {0}", message);
             Transport.SendMessage(message);
         }

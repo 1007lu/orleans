@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Azure.EventHubs;
 using Orleans.Runtime;
-using Orleans.Runtime.Configuration;
+using Microsoft.Extensions.Options;
 using Orleans.Storage;
 using Orleans.Streams;
 using Orleans.TestingHost;
@@ -43,10 +43,15 @@ namespace ServiceBus.Tests.MonitorTests
                 public void Configure(ISiloHostBuilder hostBuilder)
                 {
                     hostBuilder
-                        .AddPersistentStreams(StreamProviderName, EHStreamProviderForMonitorTestsAdapterFactory.Create, b=>b
-                        .ConfigureComponent<IStreamQueueCheckpointerFactory>((s, n) => NoOpCheckpointerFactory.Instance)
-                        .Configure<StreamStatisticOptions>(ob => ob.Configure(options => options.StatisticMonitorWriteInterval = monitorWriteInterval))
-                        .UseDynamicClusterConfigDeploymentBalancer());
+                        .AddPersistentStreams(
+                            StreamProviderName,
+                            EHStreamProviderForMonitorTestsAdapterFactory.Create,
+                            b=>
+                            {
+                                b.ConfigureComponent<IStreamQueueCheckpointerFactory>((s, n) => NoOpCheckpointerFactory.Instance);
+                                b.Configure<StreamStatisticOptions>(ob => ob.Configure(options => options.StatisticMonitorWriteInterval = monitorWriteInterval));
+                                b.UseDynamicClusterConfigDeploymentBalancer();
+                            });
                     hostBuilder
                         .ConfigureServices(services =>
                         {

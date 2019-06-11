@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -22,7 +22,7 @@ namespace Orleans.Configuration
         public string ConnectionString { get; set; }
 
         /// <summary>
-        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialzed prior to use.
+        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialized prior to use.
         /// </summary>
         public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
         /// <summary>
@@ -47,6 +47,8 @@ namespace Orleans.Configuration
         public bool UseFullAssemblyNames { get; set; }
         public bool IndentJson { get; set; }
         public TypeNameHandling? TypeNameHandling { get; set; }
+
+        public Action<JsonSerializerSettings> ConfigureJsonSerializerSettings { get; set; }
 
         /// <summary>
         /// Whether storage string payload should be formatted in Xml.

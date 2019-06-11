@@ -393,7 +393,7 @@ namespace Orleans.Runtime.ReminderService
             LocalReminderData prevReminder;
             if (localReminders.TryGetValue(key, out prevReminder)) // if found locally
             {
-                if (logger.IsEnabled(LogLevel.Debug)) logger.Debug(ErrorCode.RS_LocalStop, "Localy stopping reminder {0} as it is different than newly registered reminder {1}", prevReminder, entry);
+                if (logger.IsEnabled(LogLevel.Debug)) logger.Debug(ErrorCode.RS_LocalStop, "Locally stopping reminder {0} as it is different than newly registered reminder {1}", prevReminder, entry);
                 prevReminder.StopReminder(logger);
                 localReminders.Remove(prevReminder.Identity);
             }
@@ -526,7 +526,7 @@ namespace Orleans.Runtime.ReminderService
                 StopReminder(Logger); // just to make sure.
                 var dueTimeSpan = CalculateDueTime();
                 Timer = GrainTimer.FromTaskCallback(scheduler, this.timerLogger, asyncCallback, this, dueTimeSpan, period, name: ReminderName);
-                if (Logger.IsEnabled(LogLevel.Debug)) Logger.Debug("Reminder {0}, Due time{1}", this, dueTimeSpan);
+                if (Logger.IsEnabled(LogLevel.Debug)) Logger.Debug("Reminder {0}, Due time: {1}", this, dueTimeSpan);
                 Timer.Start();
             }
 

@@ -96,6 +96,7 @@ namespace Orleans.Runtime
             DuplicateRequest,
             Unrecoverable,
             GatewayTooBusy,
+            CacheInvalidation
         }
 
         internal HeadersContainer Headers { get; set; } = new HeadersContainer();
@@ -331,6 +332,9 @@ namespace Orleans.Runtime
             get { return Headers.CacheInvalidationHeader; }
             set { Headers.CacheInvalidationHeader = value; }
         }
+
+        public bool HasCacheInvalidationHeader => this.CacheInvalidationHeader != null
+                                                  && this.CacheInvalidationHeader.Count > 0;
         
         internal void AddToCacheInvalidationHeader(ActivationAddress address)
         {
@@ -480,9 +484,10 @@ namespace Orleans.Runtime
 
         public List<ArraySegment<byte>> Serialize(SerializationManager serializationManager, out int headerLengthOut, out int bodyLengthOut)
         {
+            var headerWriter = new BinaryTokenStreamWriter();
             var context = new SerializationContext(serializationManager)
             {
-                StreamWriter = new BinaryTokenStreamWriter()
+                StreamWriter = headerWriter
             };
             SerializationManager.SerializeMessageHeaders(Headers, context);
 
@@ -501,7 +506,7 @@ namespace Orleans.Runtime
             {
                 BufferPool.GlobalPool.Release(headerBytes);
             }
-            headerBytes = context.StreamWriter.ToBytes();
+            headerBytes = headerWriter.ToBytes();
             int headerLength = context.StreamWriter.CurrentOffset;
             int bodyLength = BufferLength(bodyBytes);
 
